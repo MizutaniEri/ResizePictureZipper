@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Data;
@@ -52,53 +52,65 @@ namespace ResizePictureZipper
         {
             return ImageCodecInfo.GetImageEncoders().ToList().Find(enc => enc.FormatID == f.Guid);
         }
-        private void saveZipFile(string FileName)
+        private void changeSizeImageInZipFile(string FileName)
         {
-            Hide();
-            Thread.Sleep(100);
             using (var zto = new FileStream(FileName, FileMode.Open))
             {
-                using (var zipArc = new ZipArchive(zto, ZipArchiveMode.Read))
+                using (var zipArc = new ZipArchive(zto, ZipArchiveMode.Update))
                 {
-                    Enumerable.Range(1, (int)numericUpDown6.Value).ToList().ForEach(number =>
+                    zipArc.Entries.ToList().ForEach(zipEntity =>
                     {
-                        new SoundPlayer(@"C:\Windows\Media\Windows Error.wav").PlaySync();
-                        Thread.Sleep((int)numericUpDown5.Value);
-                        var imageFileName = BaseNameTextBox.Text + number.ToString("D2") + ".jpg";
-                        var entry = zipArc.CreateEntry(imageFileName);
-                        using (var writer = entry.Open())
+                        var imageFileName = zipEntity.FullName;
+                        using (var stream = zipEntity.Open())
                         {
+                            Image img = Image.FromStream(stream);
+
+                            //描画先とするImageオブジェクトを作成する
+                            Bitmap canvas = new Bitmap((1920 - (138 * 2)), 1200);
+                            //ImageオブジェクトのGraphicsオブジェクトを作成する
+                            Graphics g = Graphics.FromImage(canvas);
+                            var srcRect = new Rectangle(138, 0, (1920 - (138 * 2)), 1200);
+                            var destRect = new Rectangle(0, 0, (1920 - (138 * 2)), 1200);
+                            g.DrawImage(img, destRect, srcRect, GraphicsUnit.Pixel);
+                            g.Dispose();
+
                             var memStream = new MemoryStream();
-                            //var iformat = ImageFormat.Jpeg;
-                            // 画像をメモリストリームに保存する(指定の画像形式で)
-                            int width = (int)(numericUpDown3.Value - numericUpDown1.Value);
-                            int height = (int)(numericUpDown4.Value - numericUpDown2.Value);
-                            var img = new Bitmap(width, height);
-                            var grp = Graphics.FromImage(img);
-                            int leftX = (int)numericUpDown1.Value;
-                            int leftY = (int)numericUpDown2.Value;
-                            grp.CopyFromScreen(new Point(leftX, leftY), new Point(leftX, leftY), img.Size);
-                            grp.Dispose();
-                            //img.Save(memStream, iformat);
-                            img.Save(memStream, ici, eps);
+                            canvas.Save(memStream, ici, eps);
                             long len = memStream.Length;
                             int baseSize = int.MaxValue;
                             int offset = 0;
                             var buf = memStream.ToArray();
-                            while (len > 0)
+                            var entry = zipArc.CreateEntry(imageFileName);
+                            using (var writer = entry.Open())
                             {
-                                int wlen = len > baseSize ? baseSize : (int)len;
-                                writer.Write(buf, offset, wlen);
-                                len -= wlen;
-                                offset += wlen;
+                                while (len > 0)
+                                {
+                                    int wlen = len > baseSize ? baseSize : (int)len;
+                                    writer.Write(buf, offset, wlen);
+                                    len -= wlen;
+                                    offset += wlen;
+                                }
                             }
-                            SendKeys.SendWait("{LEFT}");
                         }
+
+                        zipEntity.Delete();
                     });
                 }
             }
-            new SoundPlayer(@"C:\Windows\Media\Windows Print complete.wav").PlaySync();
-            Show();
+        }
+
+        private void button1_Click(object sender, EventArgs e)
+        {
+            var openDialog = new OpenFileDialog();
+            if (openDialog.ShowDialog() == DialogResult.OK)
+            {
+                textBox1.Text = openDialog.FileName;
+            }
+        }
+
+        private void button2_Click(object sender, EventArgs e)
+        {
+            changeSizeImageInZipFile(textBox1.Text);
         }
     }
 }
